@@ -1,0 +1,126 @@
+name: Deploy to Dokploy
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Lint with flake8
+      run: |
+        pip install flake8
+        # Stop the build if there are Python syntax errors or undefined names
+        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+        # Exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
+        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+    
+    - name: Test with pytest
+      run: |
+        pip install pytest pytest-asyncio httpx
+        # Run basic import tests
+        python -c "from app.main import app; print('Import successful')"
+        python -c "from app.services.auth import auth_service; print('Auth service import successful')"
+        python -c "from app.services.transcription import transcription_service; print('Transcription service import successful')"
+        python -c "from app.storage.transcripts import transcript_storage; print('Storage service import successful')"
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    
+    - name: Log in to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+    
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ secrets.DOCKER_USERNAME }}/telegram-transcription-bot
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=sha,prefix={{branch}}-
+          type=raw,value=latest,enable={{is_default_branch}}
+    
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Deploy to Dokploy
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.DOKPLOY_HOST }}
+        username: ${{ secrets.DOKPLOY_USERNAME }}
+        key: ${{ secrets.DOKPLOY_SSH_KEY }}
+        port: ${{ secrets.DOKPLOY_PORT }}
+        script: |
+          # Navigate to the deployment directory
+          cd /path/to/your/deployment
+          
+          # Pull the latest image
+          docker pull ${{ secrets.DOCKER_USERNAME }}/telegram-transcription-bot:latest
+          
+          # Stop and remove existing container
+          docker stop telegram-transcription-bot || true
+          docker rm telegram-transcription-bot || true
+          
+          # Run the new container
+          docker run -d \
+            --name telegram-transcription-bot \
+            --restart unless-stopped \
+            -p 8000:8000 \
+            -v /path/to/data:/app/data \
+            -e TELEGRAM_TOKEN="${{ secrets.TELEGRAM_TOKEN }}" \
+            -e WEBHOOK_URL="${{ secrets.WEBHOOK_URL }}" \
+            -e OPENAI_API_KEY="${{ secrets.OPENAI_API_KEY }}" \
+            -e SHARED_SECRET="${{ secrets.SHARED_SECRET }}" \
+            -e ALLOWED_USER_IDS="${{ secrets.ALLOWED_USER_IDS }}" \
+            -e TRANSCRIPTS_FILE="/app/data/transcripts.jsonl" \
+            ${{ secrets.DOCKER_USERNAME }}/telegram-transcription-bot:latest
+          
+          # Clean up old images
+          docker image prune -f
+          
+          # Verify deployment
+          sleep 10
+          curl -f http://localhost:8000/health || exit 1
+          
+          echo "Deployment completed successfully!"
