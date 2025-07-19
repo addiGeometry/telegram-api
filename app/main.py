@@ -1,7 +1,7 @@
 import logging
 import sys
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from app.routes import telegram, health
@@ -29,7 +29,7 @@ async def lifespan(app: FastAPI):
     logger.info(f"Webhook URL: {settings.webhook_url}")
     logger.info(f"Allowed users: {len(settings.allowed_user_ids_list)}")
     logger.info(f"Transcripts file: {settings.transcripts_file}")
-    
+
     # Validate configuration
     try:
         required_settings = {
@@ -38,24 +38,24 @@ async def lifespan(app: FastAPI):
             "shared_secret": settings.shared_secret,
             "webhook_url": settings.webhook_url
         }
-        
+
         missing_settings = [key for key, value in required_settings.items() if not value]
         if missing_settings:
             logger.error(f"Missing required settings: {missing_settings}")
             raise ValueError(f"Missing required configuration: {missing_settings}")
-        
+
         if not settings.allowed_user_ids_list:
             logger.error("No allowed user IDs configured")
             raise ValueError("No allowed user IDs configured")
-        
+
         logger.info("Configuration validation passed")
-        
+
     except Exception as e:
         logger.error(f"Configuration validation failed: {e}")
         raise
-    
+
     yield
-    
+
     # Shutdown
     logger.info("Shutting down Telegram Audio Transcription Bot")
 
@@ -116,7 +116,7 @@ async def root():
 
 if __name__ == "__main__":
     import uvicorn
-    
+
     # Run the application
     uvicorn.run(
         "app.main:app",

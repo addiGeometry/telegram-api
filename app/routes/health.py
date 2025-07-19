@@ -1,7 +1,6 @@
 from fastapi import APIRouter, HTTPException
 from datetime import datetime
 from typing import Dict, Any
-import asyncio
 import logging
 from app.storage.transcripts import transcript_storage
 from app.utils.config import settings
@@ -15,7 +14,7 @@ router = APIRouter()
 async def health_check():
     """
     Health check endpoint for monitoring service status.
-    
+
     Returns:
         dict: Service health status and basic metrics
     """
@@ -26,13 +25,13 @@ async def health_check():
             "service": "telegram-transcription-bot",
             "version": "1.0.0"
         }
-        
+
         return health_status
-        
+
     except Exception as e:
         logger.error(f"Health check failed: {e}")
         raise HTTPException(
-            status_code=500, 
+            status_code=500,
             detail=f"Health check failed: {str(e)}"
         )
 
@@ -41,7 +40,7 @@ async def health_check():
 async def detailed_health_check():
     """
     Detailed health check with service dependencies and statistics.
-    
+
     Returns:
         dict: Detailed health status including storage and configuration
     """
@@ -54,7 +53,7 @@ async def detailed_health_check():
             "version": "1.0.0",
             "checks": {}
         }
-        
+
         # Check storage
         try:
             storage_stats = await transcript_storage.get_storage_stats()
@@ -69,7 +68,7 @@ async def detailed_health_check():
                 "error": str(e)
             }
             health_status["status"] = "degraded"
-        
+
         # Check configuration
         try:
             config_check = {
@@ -91,13 +90,13 @@ async def detailed_health_check():
                 "error": str(e)
             }
             health_status["status"] = "degraded"
-        
+
         return health_status
-        
+
     except Exception as e:
         logger.error(f"Detailed health check failed: {e}")
         raise HTTPException(
-            status_code=500, 
+            status_code=500,
             detail=f"Detailed health check failed: {str(e)}"
         )
 
@@ -106,7 +105,7 @@ async def detailed_health_check():
 async def readiness_check():
     """
     Readiness check for Kubernetes/container orchestration.
-    
+
     Returns:
         dict: Readiness status indicating if service can accept requests
     """
@@ -118,33 +117,33 @@ async def readiness_check():
             settings.shared_secret,
             settings.allowed_user_ids_list
         ]
-        
+
         if not all(required_configs):
             raise HTTPException(
-                status_code=503, 
+                status_code=503,
                 detail="Service not ready: missing required configuration"
             )
-        
+
         # Test storage accessibility
         try:
             await transcript_storage.get_storage_stats()
         except Exception as e:
             raise HTTPException(
-                status_code=503, 
+                status_code=503,
                 detail=f"Service not ready: storage check failed: {e}"
             )
-        
+
         return {
             "status": "ready",
             "timestamp": datetime.utcnow().isoformat() + "Z",
             "message": "Service is ready to accept requests"
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Readiness check failed: {e}")
         raise HTTPException(
-            status_code=503, 
+            status_code=503,
             detail=f"Service not ready: {str(e)}"
         )
