@@ -16,7 +16,7 @@ pydantic==2.5.0
 pydantic[dotenv]==2.5.0
 
 # File operations
-aiofiles==23.2.0
+aiofiles~=23.2.1
 
 # Python standard library enhancements
 typing-extensions==4.8.0
