@@ -13,7 +13,7 @@ aiogram==3.2.0
 
 # Configuration management
 pydantic==2.5.0
-pydantic[dotenv]==2.5.0
+pydantic-settings==2.1.0
 
 # File operations
 aiofiles~=23.2.1
